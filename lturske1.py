@@ -21,10 +21,10 @@ def minimax_move(board, player, max_ply, history):
     :param board: a game board
     :param player: a player
     :param max_ply: number of ply to search out to
-    :param n: size of the board, default 4
+    :param history: the history of the game
     :return: a game board
     """
-    # Set defualt values and see what is the best move
+    # Set default values and see what is the best move
     value = -1
     action = actions(board)[0]
     for a in actions(board):
@@ -32,6 +32,7 @@ def minimax_move(board, player, max_ply, history):
         if value < res:
             value = res
             action = a
+    # Make the move
     return push.move(board, (player, action.get('side'), action.get('index')))
 
 
@@ -41,17 +42,23 @@ def alpha_beta_move(board, player, max_ply, history):
     :param board: a game board
     :param player: a player
     :param max_ply: number of ply to search out to
-    :param n: size of the board, default 4
+    :param history: the history of the game
     :return: a game board
     """
     # Set default values and see what is the best move
     value = -1
     action = actions(board)[0]
+    # Reset alpha beta values
+    global alpha
+    global beta
+    alpha = 1000
+    beta = -1
     for a in actions(board):
         res = max_value_alpha_beta(result(board, a, player), opponent(player), 1, max_ply, history)
         if value < res:
             value = res
             action = a
+    # Make the move
     return push.move(board, (player, action.get('side'), action.get('index')))
 
 
@@ -62,8 +69,7 @@ def max_value_alpha_beta(board, player, ply, max_ply, history):
     :param player: a player
     :param ply: current ply
     :param max_ply: max ply to go to
-    :param alpha: the alpha value
-    :param beta: the beta value
+    :param history: the history of the game
     :return: a node value
     """
     global alpha
@@ -75,7 +81,6 @@ def max_value_alpha_beta(board, player, ply, max_ply, history):
 
     for a in actions(board):
         v = max(v, min_value_alpha_beta(result(board, a, player), opponent(player), ply+1, max_ply, history))
-
         if v >= beta:
             return v
         alpha = max(alpha, v)
@@ -89,6 +94,7 @@ def max_value(board, player, ply, max_ply, history):
     :param player: a player
     :param ply: current ply
     :param max_ply: max ply to go to
+    :param history: the history of the game
     :return: value of node
     """
     # Base Case, if you have reached max play just get value so far
@@ -109,9 +115,7 @@ def min_value_alpha_beta(board, player, ply, max_ply, history):
     :param player: a player
     :param ply: current ply
     :param max_ply: max ply to go to
-    :param alpha: the alpha value
-    :param beta: the beta value
-
+    :param history: the history of the game
     :return: value of node
     """
     global beta
@@ -136,6 +140,7 @@ def min_value(board, player, ply, max_ply, history):
     :param player: a player
     :param ply: current ply
     :param max_ply: max ply to go to
+    :param history: the history of the game
     :return:
     """
 
@@ -190,15 +195,20 @@ def utility(board, player, history):
     Get the utility of the board based on this player
     :param board: a game board
     :param player: a player
+    :param history: the history of the game
     :return: integer of the utility of the board
     """
     res = game_done(board, player, history)
+    # If you will win at this node
     if res.get('done') and res.get('winner') is player:
         return 50
+    # If your opponent will win
     elif res.get('done') and res.get('winner') is opponent(player):
         return 0
+    # If you have less straights than your opponents
     if push.straights(board).get(player) < push.straights(board).get(opponent(player)):
         return 0
+    # How many straights will you have +1
     return push.straights(board).get(player) + 1
 
 
@@ -288,6 +298,7 @@ def play_round_minimax_v_alpha_beta(first, ply, alphaPly):
     This will play a round of Push
     :param: will minimax go first
     :param: max ply
+    :param alphaPly: how many ply for alpha beta to search
     :return: (done, winner, board)
     """
     board = push.create()
@@ -333,7 +344,7 @@ def minimax_versus_random():
     board = []
     print("Minimax Player is searching " + str(ply) + " ply.")
     # Play push 5 times switching who goes first
-    for n in range(50):
+    for n in range(5):
         outcome = play_round_minimax_v_random(first, ply)
         if first and outcome.get('winner') is 'X':
             minimax += 1
@@ -363,11 +374,7 @@ def minimax_versus_alphabeta():
     print("Minimax Player is searching " + str(ply) + " ply.")
     print("Alpha Beta Player is searching " + str(alphaPly) + " ply.")
     # Play push 5 times switching who goes first
-    for n in range(50):
-        global alpha
-        global beta
-        alpha = 1000
-        beta = -1
+    for n in range(5):
         outcome = play_round_minimax_v_alpha_beta(first, ply, alphaPly)
         if first and outcome.get('winner') is 'X':
             minimax += 1
@@ -376,8 +383,8 @@ def minimax_versus_alphabeta():
         else:
             alphawins += 1
         first = not first
-
         board = outcome.get('board')
+
     print("Minimax: " + str(minimax))
     print("AlphaBeta: " + str(alphawins))
     print()
