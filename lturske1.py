@@ -1,6 +1,8 @@
 import push
 import random
 
+alpha = -1
+beta = 1000
 def random_move(board, player, n: int=4):
     """
     Makes a random move on the board passed in from the player passed in
@@ -13,7 +15,7 @@ def random_move(board, player, n: int=4):
     return push.move(board, (player, random.choice(directions), random.randint(1, n)))
 
 
-def minimax_move(board, player, max_ply):
+def minimax_move(board, player, max_ply, history):
     """
     Minimax algorithm playing to play push with limited ply
     :param board: a game board
@@ -24,37 +26,110 @@ def minimax_move(board, player, max_ply):
     """
     # Set defualt values and see what is the best move
     value = -1
-    action = actions(board).pop()
+    action = actions(board)[0]
     for a in actions(board):
-        res = min_value(result(board, a, player), opponent(player), 1, max_ply)
+        res = min_value(result(board, a, player), opponent(player), 1, max_ply, history)
         if value < res:
             value = res
             action = a
     return push.move(board, (player, action.get('side'), action.get('index')))
 
 
-def max_value(board, player, ply, max_ply):
+def alpha_beta_move(board, player, max_ply, history):
+    """
+    Minimax algorithm playing to play push with limited ply and alpha beta pruning
+    :param board: a game board
+    :param player: a player
+    :param max_ply: number of ply to search out to
+    :param n: size of the board, default 4
+    :return: a game board
+    """
+    # Set default values and see what is the best move
+    value = -1
+    action = actions(board)[0]
+    for a in actions(board):
+        res = max_value_alpha_beta(result(board, a, player), opponent(player), 1, max_ply, history)
+        if value < res:
+            value = res
+            action = a
+    return push.move(board, (player, action.get('side'), action.get('index')))
+
+
+def max_value_alpha_beta(board, player, ply, max_ply, history):
+    """
+    Max value portion of the minimax algorithm with alpha beta pruning
+    :param board: a game board
+    :param player: a player
+    :param ply: current ply
+    :param max_ply: max ply to go to
+    :param alpha: the alpha value
+    :param beta: the beta value
+    :return: a node value
+    """
+    global alpha
+    # Base Case, if you have reached max play just get value so far
+    if ply is max_ply:
+        return utility(board, player, history)
+    # Choose the smallest value based on the min value portion of the minimax algorithm and return it
+    v = -100
+
+    for a in actions(board):
+        v = max(v, min_value_alpha_beta(result(board, a, player), opponent(player), ply+1, max_ply, history))
+
+        if v >= beta:
+            return v
+        alpha = max(alpha, v)
+    return v
+
+
+def max_value(board, player, ply, max_ply, history):
     """
     Max value portion of the minimax algorithm
     :param board: a game board
     :param player: a player
     :param ply: current ply
     :param max_ply: max ply to go to
-    :return:
+    :return: value of node
     """
     # Base Case, if you have reached max play just get value so far
     if ply is max_ply:
-        return utility(board, player)
+        return utility(board, player, history)
     # Choose the smallest value based on the min value portion of the minimax algorithm and return it
     v = -1
     for a in actions(board):
-        res = min_value(result(board, a, player), opponent(player), ply+1, max_ply)
-        if v < res:
-            v = res
+        v = max(v, min_value(result(board, a, player), opponent(player), ply+1, max_ply, history))
+
     return v
 
 
-def min_value(board, player, ply, max_ply):
+def min_value_alpha_beta(board, player, ply, max_ply, history):
+    """
+    Min value portion of the minimax algorithm with alpha beta pruning
+    :param board: a game board
+    :param player: a player
+    :param ply: current ply
+    :param max_ply: max ply to go to
+    :param alpha: the alpha value
+    :param beta: the beta value
+
+    :return: value of node
+    """
+    global beta
+    # Base Case, if you have reached max play just get value so far
+    if ply is max_ply:
+        return utility(board, player, history)
+    v = 1000
+    # Choose the smallest value based on the min value portion of the minimax algorithm and return it
+    for a in actions(board):
+        v = min(v, max_value_alpha_beta(result(board, a, player), opponent(player), ply+1, max_ply, history))
+        if v <= alpha:
+            return v
+        beta = min(beta, v)
+        print(beta)
+    return v
+
+
+def min_value(board, player, ply, max_ply, history):
     """
     Min value portion of the minimax algorithm
     :param board: a game board
@@ -63,15 +138,14 @@ def min_value(board, player, ply, max_ply):
     :param max_ply: max ply to go to
     :return:
     """
+
     # Base Case, if you have reached max play just get value so far
     if ply is max_ply:
-        return utility(board, player)
+        return utility(board, player, history)
     v = 1000
     # Choose the smallest value based on the min value portion of the minimax algorithm and return it
     for a in actions(board):
-        res = max_value(result(board, a, player), opponent(player), ply+1, max_ply)
-        if v > res:
-            v = res
+        v = min(v, max_value(result(board, a, player), opponent(player), ply+1, max_ply, history))
     return v
 
 
@@ -106,19 +180,26 @@ def actions(board):
     directions = ['T', 'B', 'L', 'R']
     actions = []
     for direction in directions:
-        for index in range(len(board)-1):
+        for index in range(len(board)):
             actions.append({'side': direction, 'index': index+1})
     return actions
 
 
-def utility(board, player):
+def utility(board, player, history):
     """
     Get the utility of the board based on this player
     :param board: a game board
     :param player: a player
     :return: integer of the utility of the board
     """
-    return push.straights(board).get(player)
+    res = game_done(board, player, history)
+    if res.get('done') and res.get('winner') is player:
+        return 50
+    elif res.get('done') and res.get('winner') is opponent(player):
+        return 0
+    if push.straights(board).get(player) < push.straights(board).get(opponent(player)):
+        return 0
+    return push.straights(board).get(player) + 1
 
 
 def print_board(board):
@@ -151,47 +232,160 @@ def game_done(board, player, history):
 
     # Determine if a player has more straights
     if oPlayer > xPlayer:
-        return {'done': True, 'winner': 'O'}
+        return {'done': True, 'winner': 'O', 'board': board}
     elif xPlayer > oPlayer:
-        return {'done': True, 'winner': 'X'}
+        return {'done': True, 'winner': 'X', 'board': board}
     # Determine if the player caused a cycle
     for old in history:
         if push.equal(board, old):
-            print("ASDF")
             if player is 'O':
-                return {'done': True, 'winner': 'X'}
+                return {'done': True, 'winner': 'X', 'board':  board}
             elif player is 'X':
-                return {'done': True, 'winner': "O"}
-    return {'done': False, 'winner': None}
+                return {'done': True, 'winner': "O", 'board': board}
+    return {'done': False, 'winner': None, 'board': board}
 
-def minimax_versus_random():
+
+def play_round_minimax_v_random(first, ply):
+    """
+    This will play a round of Push
+    :param: will minimax go first
+    :param: max ply
+    :return: (done, winner, board)
+    """
     board = push.create()
     history = []
-    outcome = None
-    while True:
-        board = minimax_move(board, 'X', 3)
-        if game_done(board, 'X', history).get('done'):
-            print("Winner: " + game_done(board, 'X', history).get('winner'))
-            break
-        history.append(board)
-        board = random_move(board, 'O')
-        if game_done(board, 'O', history).get('done'):
-            print("Winner: " + game_done(board, 'O', history).get('winner'))
-            break
-        history.append(board)
-    #print_board(board)
-    pass # remove
+    # If Minimax is going first play a round
+    if first:
+        while True:
+            # Make a move
+            board = minimax_move(board, 'X', ply, history)
+            # Get the outcome of the move and determine if someone won the game
+            outcome = game_done(board, 'X', history)
+            if outcome.get('done'):
+                return outcome
+            history.append(board)
+            board = random_move(board, 'O')
+            outcome = game_done(board, 'O', history)
+            if outcome.get('done'):
+                return outcome
+            history.append(board)
+    else:
+        while True:
+            board = random_move(board, 'X')
+            outcome = game_done(board, 'X', history)
+            if outcome.get('done'):
+                return outcome
+            history.append(board)
+            board = minimax_move(board, 'O', ply, history)
+            outcome = game_done(board, 'O', history)
+            if outcome.get('done'):
+                return outcome
+            history.append(board)
+
+
+def play_round_minimax_v_alpha_beta(first, ply, alphaPly):
+    """
+    This will play a round of Push
+    :param: will minimax go first
+    :param: max ply
+    :return: (done, winner, board)
+    """
+    board = push.create()
+    history = []
+    # If Minimax is going first play a round
+    if first:
+        while True:
+            # Make a move
+            board = minimax_move(board, 'X', ply, history)
+            # Get the outcome of the move and determine if someone won the game
+            outcome = game_done(board, 'X', history)
+            if outcome.get('done'):
+                return outcome
+            history.append(board)
+            board = alpha_beta_move(board, 'O', alphaPly, history)
+            outcome = game_done(board, 'O', history)
+            if outcome.get('done'):
+                return outcome
+            history.append(board)
+    else:
+        while True:
+            board = alpha_beta_move(board, 'X', alphaPly, history)
+            outcome = game_done(board, 'X', history)
+            if outcome.get('done'):
+                return outcome
+            history.append(board)
+            board = minimax_move(board, 'O', ply, history)
+            outcome = game_done(board, 'O', history)
+            if outcome.get('done'):
+                return outcome
+            history.append(board)
+
+
+def minimax_versus_random():
+    """
+    Play push 5 times switching who goes first
+    :return: nothing
+    """
+    minimax = 0
+    rand = 0
+    ply = 3
+    first = True
+    board = []
+    print("Minimax Player is searching " + str(ply) + " ply.")
+    # Play push 5 times switching who goes first
+    for n in range(50):
+        outcome = play_round_minimax_v_random(first, ply)
+        if first and outcome.get('winner') is 'X':
+            minimax += 1
+        elif not first and outcome.get('winner') is 'O':
+            minimax += 1
+        else:
+            rand += 1
+        first = not first
+        board = outcome.get('board')
+    print("Minimax: " + str(minimax))
+    print("Random: " + str(rand))
+    print()
+    print_board(board)
 
 
 def minimax_versus_alphabeta():
-    ### YOUR SOLUTION HERE ###
-    # Refer to the PDF for an example of the output this function should print.
-    ### YOUR SOLUTION HERE ### 
-    pass # remove
+    """
+    Play push 5 times switching who goes first
+    :return: nothing
+    """
+    minimax = 0
+    alphawins = 0
+    ply = 3
+    alphaPly = 7
+    first = True
+    board = []
+    print("Minimax Player is searching " + str(ply) + " ply.")
+    print("Alpha Beta Player is searching " + str(alphaPly) + " ply.")
+    # Play push 5 times switching who goes first
+    for n in range(50):
+        global alpha
+        global beta
+        alpha = 1000
+        beta = -1
+        outcome = play_round_minimax_v_alpha_beta(first, ply, alphaPly)
+        if first and outcome.get('winner') is 'X':
+            minimax += 1
+        elif not first and outcome.get('winner') is 'O':
+            minimax += 1
+        else:
+            alphawins += 1
+        first = not first
+
+        board = outcome.get('board')
+    print("Minimax: " + str(minimax))
+    print("AlphaBeta: " + str(alphawins))
+    print()
+    print_board(board)
 
 
 if __name__ == "__main__":
     print("Random v. Minimax")
     minimax_versus_random()
-    #print("\nMinimax v. Alpha Beta")
-    #minimax_versus_alphabeta()
+    print("\nMinimax v. Alpha Beta")
+    minimax_versus_alphabeta()
